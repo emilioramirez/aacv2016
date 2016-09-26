@@ -18,6 +18,8 @@ mediante 5-fold cross-validation en el conjunto de entrenamiento (gráfica) de
 uno de los folds. Una vez elegido el parámetro, reportar media y desviación
 estándar del accuracy sobre el conjunto de test.
 
+50 - 90 - 140
+
 Hsu, C. W., Chang, C. C., & Lin, C. J. (2003). A practical guide to support
 vector classification.
 
@@ -130,7 +132,7 @@ def n_per_class_split(dataset, n=100, random_state=None):
 
     train_set = []
     test_set = []
-    for id_ in xrange(n_classes):
+    for id_ in range(n_classes):
         idxs = [i for i, j in enumerate(cid) if j == id_]
         random_state.shuffle(idxs)
 
@@ -219,7 +221,7 @@ def kmeans_fit(samples, n_clusters, maxiter=100, tol=1e-4, random_state=None):
     centroids = samples[idxs, :]
 
     J_old = np.inf
-    for iter_ in xrange(maxiter):
+    for iter_ in range(maxiter):
 
         # SAMPLE-TO-CLUSTER ASSIGNMENT
 
@@ -233,7 +235,7 @@ def kmeans_fit(samples, n_clusters, maxiter=100, tol=1e-4, random_state=None):
         # CENTROIDS UPDATE (+ EVAL DISTORTION)
 
         J_new = 0.
-        for k in xrange(n_clusters):
+        for k in range(n_clusters):
             idxs = np.where(assignment == k)[0]
             if len(idxs) == 0:
                 raise RuntimeError('k-means crash!')

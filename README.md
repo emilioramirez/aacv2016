@@ -40,8 +40,9 @@ L2 = x / abs(x)
 
 Aplicar sqrt solo, L2 solo, combinacion de ambas:
 
-        SIFT    BoVW    SIFT+BoVW
-sqrt      -       -         -
-L2        -       -         -
-sqrt+L2   -       -         -
 
+|          | SIFT  |  BoVW  |  SIFT+BoVW  |
+|----------|-------|--------|-------------|
+|  sqrt    |   -   |   -    |     -       |
+|  L2      |   -   |   -    |     -       |
+|  sqrt+L2 |   -   |   -    |     -       |
