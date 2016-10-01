@@ -18,13 +18,14 @@ mediante 5-fold cross-validation en el conjunto de entrenamiento (gráfica) de
 uno de los folds. Una vez elegido el parámetro, reportar media y desviación
 estándar del accuracy sobre el conjunto de test.
 
-50 - 90 - 140
 
 Hsu, C. W., Chang, C. C., & Lin, C. J. (2003). A practical guide to support
 vector classification.
 
 2) Evaluar accuracy vs. n_clusters. Que pasa con los tiempos de cómputo de
 BoVW?. Gráficas.
+
+50 - 90 - 140
 
 Si tengo descriptores locales L2-normalizados: cómo puedo optimizar la
 asignación de los mismos a palabras del diccionario? (ayuda: expresar la
@@ -264,6 +265,16 @@ def compute_bovw(vocabulary, features, norm=2):
     return bovw / (nrm + 1e-7)
 
 
+def split_into_X_y(dataset, output_path='cache'):
+    X, y = [], []
+    for fname, cid in dataset:
+        bovwfile = join(output_path, splitext(fname)[0] + '.bovw')
+        #X.append(pickle.load(open(bovwfile, 'rb')))
+        X.append(load_data(bovwfile))
+        y.append(cid)
+    return (np.array(X), np.array(y))
+
+
 if __name__ == "__main__":
     random_state = np.random.RandomState(12345)
 
@@ -313,7 +324,8 @@ if __name__ == "__main__":
     # --------------------
     # COMPUTE BoVW VECTORS
     # --------------------
-
+    from datetime import datetime
+    start_time = datetime.now()
     for fname in dataset['fname']:
         # low-level features file
         featfile = join(output_path, splitext(fname)[0] + '.feat')
@@ -330,35 +342,27 @@ if __name__ == "__main__":
 
         save_data(bovw, bovwfile)
         print('{}'.format(bovwfile))
+    stop_time = datetime.now()
+    time_lapse = stop_time - start_time
+    print("time lapse on bovw for {} clusters:".format(n_clusters), time_lapse.total_seconds())
 
     # -----------------
     # TRAIN CLASSIFIERS
     # -----------------
 
     # setup training data
-    X_train, y_train = [], []
-    for fname, cid in train_set:
-        bovwfile = join(output_path, splitext(fname)[0] + '.bovw')
-        #X_train.append(pickle.load(open(bovwfile, 'rb')))
-        X_train.append(load_data(bovwfile))
-        y_train.append(cid)
-    X_train = np.array(X_train)
-    y_train = np.array(y_train)
+    X_train, y_train = split_into_X_y(train_set)
 
     svm = LinearSVC(C=1.0, verbose=1)
     svm.fit(X_train, y_train)
 
     # setup testing data
-    X_test, y_test = [], []
-    for fname, cid in test_set:
-        bovwfile = join(output_path, splitext(fname)[0] + '.bovw')
-        #X_test.append(pickle.load(open(bovwfile, 'rb')))
-        X_test.append(load_data(bovwfile))
-        y_test.append(cid)
-    X_test = np.array(X_test)
-    y_test = np.array(y_test)
+    X_test, y_test = split_into_X_y(test_set)
 
     y_pred = svm.predict(X_test)
 
     tp = np.sum(y_test == y_pred)
     print('accuracy = {:.3f}'.format(float(tp) / len(y_test)))
+
+    # from utils import cross_validation
+    # cross_validation(X_train, y_train)
