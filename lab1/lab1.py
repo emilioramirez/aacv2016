@@ -96,6 +96,28 @@ from sklearn.svm import LinearSVC
 from scipy.spatial import distance
 from scipy.io import savemat, loadmat
 
+DAISY_L2 = '-daisy:L2'
+DAISY_sqrt = '-daisy:sqrt'
+DAISY_L2_sqrt = '-daisy:L2+sqrt'
+DAISY_NONE = '-daisy:None'
+EXT_FEAT = '{}.feat'#'.feat'
+
+VOCABYLARY = 'vocabulary{:d}{}.dat'
+SAMPLE = 'sample{:d}{}.feat'
+
+CURRENT_DAISY = DAISY_L2
+
+
+BOVW_L2 = '-bovw:L2'
+BOVW_sqrt = '-bovw:sqrt'
+BOVW_L2_sqrt = '-bovw:L2+sqrt'
+BOVW_None = '-bovw:None'
+
+
+CURRENT_BOVW = BOVW_L2
+
+EXT_BOVW = '{}{}.bovw'
+
 
 def save_data(data, filename, force_overwrite=False):
     # if dir/subdir doesn't exist, create it
@@ -158,7 +180,7 @@ def extract_multiscale_dense_features(imfile, step=8, scales=SCALES_3):
     for sc in scales:
         dsize = (int(sc * im.shape[0]), int(sc * im.shape[1]))
         im_scaled = cv2.resize(im, dsize, interpolation=cv2.INTER_LINEAR)
-        feat = daisy(im_scaled, step=step)
+        feat = daisy(im_scaled, step=step, normalization='off')
         if feat.size == 0:
             break
         ndim = feat.shape[2]
@@ -174,31 +196,52 @@ def compute_features(base_path, im_list, output_path):
         imfile = join(base_path, fname)
 
         # check if destination file already exists
-        featfile = join(output_path, splitext(fname)[0] + '.feat')
-        if exists(featfile):
-            print('{} already exists'.format(featfile))
+        featfile = join(output_path, splitext(fname)[0] + EXT_FEAT.format(CURRENT_DAISY))
+        current_file = featfile
+        if exists(current_file):
+            print('{} already exists'.format(current_file))
             continue
 
-        feat = extract_multiscale_dense_features(imfile)
+        # feat = extract_multiscale_dense_features(imfile)
+        # save_data(feat, featfile)
 
-        save_data(feat, featfile)
+        # feat_l2 = join(output_path, splitext(fname)[0] + EXT_FEAT.format(CURRENT_DAISY))
+        # current_file = feat_l2
+        # save_data(normalize_L2(feat), feat_l2)
+
+        # feat_sqrt = join(output_path, splitext(fname)[0] + EXT_FEAT.format(CURRENT_DAISY))
+        # current_file = feat_sqrt
+        # save_data(normalize_sqrt(feat), feat_sqrt)
+
+        # feat_l2_sqrt = join(output_path, splitext(fname)[0] + EXT_FEAT.format(CURRENT_DAISY))
+        # current_file = feat_l2_sqrt
+        # save_data(normalize_L2(normalize_sqrt(feat)), feat_l2_sqrt)
+
         print('{}: {} features'.format(featfile, feat.shape[0]))
 
 
-def sample_feature_set(base_path, im_list, output_path, n_samples,
-                       random_state=None):
+def normalize_L2(vector, norm=2):
+    nrm = np.linalg.norm(vector, ord=norm)
+    return vector / (nrm + 1e-7)
+
+
+def normalize_sqrt(vector):
+    return np.sign(vector) * np.sqrt(np.absolute(vector))
+
+
+def sample_feature_set(base_path, im_list, output_path, n_samples, random_state=None):
     if random_state is None:
         random_state = np.random.RandomState()
 
     n_per_file = 100
-    sample_file = join(output_path, 'sample{:d}.feat'.format(n_samples))
+    sample_file = join(output_path, SAMPLE.format(n_samples, CURRENT_DAISY))
     if exists(sample_file):
         sample = load_data(sample_file)
     else:
         sample = []
         while len(sample) < n_samples:
             i = random_state.randint(0, len(im_list))
-            featfile = join(base_path, splitext(im_list[i])[0] + '.feat')
+            featfile = join(base_path, splitext(im_list[i])[0] + EXT_FEAT.format(CURRENT_DAISY))
             feat = load_data(featfile)
             idxs = random_state.choice(range(feat.shape[0]), 100)
             sample += [feat[i] for i in idxs]
@@ -261,14 +304,13 @@ def compute_bovw(vocabulary, features, norm=2):
     dist2 = distance.cdist(features, vocabulary, metric='sqeuclidean')
     assignments = np.argmin(dist2, axis=1)
     bovw, _ = np.histogram(assignments, range(vocabulary.shape[1]))
-    nrm = np.linalg.norm(bovw, ord=norm)
-    return bovw / (nrm + 1e-7)
+    return bovw
 
 
 def split_into_X_y(dataset, output_path='cache'):
     X, y = [], []
     for fname, cid in dataset:
-        bovwfile = join(output_path, splitext(fname)[0] + '.bovw')
+        bovwfile = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, CURRENT_BOVW))
         #X.append(pickle.load(open(bovwfile, 'rb')))
         X.append(load_data(bovwfile))
         y.append(cid)
@@ -282,6 +324,7 @@ if __name__ == "__main__":
     # DATA PREPARATION
     # ----------------
 
+    N_CLUSTER = 100
     # paths
     dataset_path = abspath('scene_categories')
     output_path = 'cache'
@@ -299,52 +342,66 @@ if __name__ == "__main__":
     print('{} training samples / {} testing samples'.format(n_train, n_test))
 
     # compute and store low level features for all images
-    compute_features(dataset_path, dataset['fname'], output_path)
+    # compute_features(dataset_path, dataset['fname'], output_path)
 
     # --------------------------------
     # UNSUPERVISED DICTIONARY LEARNING
     # --------------------------------
 
-    n_samples = int(1e5)
-    n_clusters = 100
-    vocabulary_file = join(output_path, 'vocabulary{:d}.dat'.format(n_clusters))
-    if exists(vocabulary_file):
-        #vocabulary = pickle.load(open(vocabulary_file, 'rb'))
-        vocabulary = load_data(vocabulary_file)
-    else:
-        train_files = [fname for (fname, cid) in train_set]
-        sample = sample_feature_set(output_path, train_files, output_path,
-                                    n_samples, random_state=random_state)
-        vocabulary = kmeans_fit(sample, n_clusters=n_clusters,
-                                random_state=random_state)
-        save_data(vocabulary, vocabulary_file)
+    # n_samples = int(1e5)
+    # n_clusters = N_CLUSTER
+    # vocabulary_file = join(output_path, VOCABYLARY.format(n_clusters, CURRENT_DAISY))
+    # if exists(vocabulary_file):
+    #     #vocabulary = pickle.load(open(vocabulary_file, 'rb'))
+    #     vocabulary = load_data(vocabulary_file)
+    # else:
+    #     train_files = [fname for (fname, cid) in train_set]
+    #     sample = sample_feature_set(output_path, train_files, output_path,
+    #                                 n_samples, random_state=random_state)
+    #     vocabulary = kmeans_fit(sample, n_clusters=n_clusters,
+    #                             random_state=random_state)
+    #     save_data(vocabulary, vocabulary_file)
 
-    print('{}: {} clusters'.format(vocabulary_file, vocabulary.shape[0]))
+    # print('{}: {} clusters'.format(vocabulary_file, vocabulary.shape[0]))
 
     # --------------------
     # COMPUTE BoVW VECTORS
     # --------------------
-    from datetime import datetime
-    start_time = datetime.now()
-    for fname in dataset['fname']:
-        # low-level features file
-        featfile = join(output_path, splitext(fname)[0] + '.feat')
+    # from datetime import datetime
+    # start_time = datetime.now()
+    # for fname in dataset['fname']:
+    #     # low-level features file
+    #     featfile = join(output_path, splitext(fname)[0] + EXT_FEAT.format(CURRENT_DAISY))
 
-        # check if destination file already exists
-        bovwfile = join(output_path, splitext(fname)[0] + '.bovw')
-        if exists(bovwfile):
-            print('{} already exists'.format(bovwfile))
-            continue
+    #     # check if destination file already exists
+    #     bovwfile = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, CURRENT_BOVW))
+    #     if exists(bovwfile):
+    #         print('{} already exists'.format(bovwfile))
+    #         continue
 
-        #feat = pickle.load(open(featfile, 'rb'))
-        feat = load_data(featfile)
-        bovw = compute_bovw(vocabulary, feat, norm=2)
+    #     #feat = pickle.load(open(featfile, 'rb'))
+    #     feat = load_data(featfile)
+    #     bovw = compute_bovw(vocabulary, feat)
 
-        save_data(bovw, bovwfile)
-        print('{}'.format(bovwfile))
-    stop_time = datetime.now()
-    time_lapse = stop_time - start_time
-    print("time lapse on bovw for {} clusters:".format(n_clusters), time_lapse.total_seconds())
+    #     #save_data(bovw, bovwfile)
+    #     print("NO SE GRABO LA NORMALIZACION CORRECTA DEL CURRENT_BOVW")
+
+    #     # bovwfile_l2 = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, BOVW_L2))
+    #     # bovw_l2 = normalize_L2(bovw)
+    #     # save_data(bovw_l2, bovwfile_l2)
+
+    #     # bovwfile_sqrt = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, BOVW_sqrt))
+    #     # bovw_sqrt = normalize_sqrt(bovw)
+    #     # save_data(bovw_sqrt, bovwfile_sqrt)
+
+    #     # bovwfile_l2_sqrt = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, BOVW_L2_sqrt))
+    #     # bovw_l2_sqrt = normalize_L2(normalize_sqrt(bovw))
+    #     # save_data(bovw_l2_sqrt, bovwfile_l2_sqrt)
+
+    #     print('{}'.format(bovwfile))
+    # stop_time = datetime.now()
+    # time_lapse = stop_time - start_time
+    # print("time lapse on bovw for {} clusters:".format(n_clusters), time_lapse.total_seconds())
 
     # -----------------
     # TRAIN CLASSIFIERS
@@ -353,7 +410,7 @@ if __name__ == "__main__":
     # setup training data
     X_train, y_train = split_into_X_y(train_set)
 
-    svm = LinearSVC(C=1.0, verbose=1)
+    svm = LinearSVC(C=1.0)
     svm.fit(X_train, y_train)
 
     # setup testing data
