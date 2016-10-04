@@ -91,7 +91,7 @@ import cv2
 from skimage.feature import daisy
 from skimage.transform import rescale
 
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC
 
 from scipy.spatial import distance
 from scipy.io import savemat, loadmat
@@ -100,21 +100,23 @@ DAISY_L2 = '-daisy:L2'
 DAISY_sqrt = '-daisy:sqrt'
 DAISY_L2_sqrt = '-daisy:L2+sqrt'
 DAISY_NONE = '-daisy:None'
+DAISY_L1 = '-daisy:L1'
 EXT_FEAT = '{}.feat'#'.feat'
 
 VOCABYLARY = 'vocabulary{:d}{}.dat'
 SAMPLE = 'sample{:d}{}.feat'
 
-CURRENT_DAISY = DAISY_L2
+CURRENT_DAISY = DAISY_L1
 
 
 BOVW_L2 = '-bovw:L2'
 BOVW_sqrt = '-bovw:sqrt'
 BOVW_L2_sqrt = '-bovw:L2+sqrt'
 BOVW_None = '-bovw:None'
+BOVW_L1 = '-bovw:L2'  # Dice L2 pero en realidad es L1
 
 
-CURRENT_BOVW = BOVW_L2
+CURRENT_BOVW = BOVW_L1
 
 EXT_BOVW = '{}{}.bovw'
 
@@ -180,7 +182,7 @@ def extract_multiscale_dense_features(imfile, step=8, scales=SCALES_3):
     for sc in scales:
         dsize = (int(sc * im.shape[0]), int(sc * im.shape[1]))
         im_scaled = cv2.resize(im, dsize, interpolation=cv2.INTER_LINEAR)
-        feat = daisy(im_scaled, step=step, normalization='off')
+        feat = daisy(im_scaled, step=step)
         if feat.size == 0:
             break
         ndim = feat.shape[2]
@@ -202,8 +204,8 @@ def compute_features(base_path, im_list, output_path):
             print('{} already exists'.format(current_file))
             continue
 
-        # feat = extract_multiscale_dense_features(imfile)
-        # save_data(feat, featfile)
+        feat = extract_multiscale_dense_features(imfile)
+        save_data(feat, featfile)
 
         # feat_l2 = join(output_path, splitext(fname)[0] + EXT_FEAT.format(CURRENT_DAISY))
         # current_file = feat_l2
@@ -384,11 +386,15 @@ if __name__ == "__main__":
     #     bovw = compute_bovw(vocabulary, feat)
 
     #     #save_data(bovw, bovwfile)
-    #     print("NO SE GRABO LA NORMALIZACION CORRECTA DEL CURRENT_BOVW")
+    #     # print("NO SE GRABO LA NORMALIZACION CORRECTA DEL CURRENT_BOVW")
 
     #     # bovwfile_l2 = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, BOVW_L2))
     #     # bovw_l2 = normalize_L2(bovw)
     #     # save_data(bovw_l2, bovwfile_l2)
+
+    #     # bovwfile_l1 = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, BOVW_L2))
+    #     # bovw_l1 = normalize_L2(bovw, norm=1)
+    #     # save_data(bovw_l1, bovwfile_l1)
 
     #     # bovwfile_sqrt = join(output_path, splitext(fname)[0] + EXT_BOVW.format(CURRENT_DAISY, BOVW_sqrt))
     #     # bovw_sqrt = normalize_sqrt(bovw)
@@ -410,16 +416,17 @@ if __name__ == "__main__":
     # setup training data
     X_train, y_train = split_into_X_y(train_set)
 
-    svm = LinearSVC(C=1.0)
-    svm.fit(X_train, y_train)
+    # svm = LinearSVC(C=10.0)
+    # # svm = SVC(C=10.0, gamma=10)
+    # svm.fit(X_train, y_train)
 
-    # setup testing data
-    X_test, y_test = split_into_X_y(test_set)
+    # # setup testing data
+    # X_test, y_test = split_into_X_y(test_set)
 
-    y_pred = svm.predict(X_test)
+    # y_pred = svm.predict(X_test)
 
-    tp = np.sum(y_test == y_pred)
-    print('accuracy = {:.3f}'.format(float(tp) / len(y_test)))
+    # tp = np.sum(y_test == y_pred)
+    # print('accuracy = {:.3f}'.format(float(tp) / len(y_test)))
 
-    # from utils import cross_validation
-    # cross_validation(X_train, y_train)
+    from utils import cross_validation
+    print(cross_validation(X_train, y_train))
