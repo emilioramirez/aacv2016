@@ -1,0 +1,35 @@
+# Lab2
+25/10/16
+
+N_QUERY puede ser menos para develop
+
+1) resultado final esperado 2.8 despues de implementar este punto.
+Matching usando opencv
+matriz de transformacion afin
+armar ransac con los datos anteriores
+
+2) x = matriz de descriptores (100k)
+un xiT (x i transpuesta)
+
+x~i = PT(xi - u) (P es una matriz de 64x64) esta funcion esta en pca_project()
+P' = P(:, :d) (esto esta dentro de la funcion pca_project)
+x~i = P'T(x-u) pertenece a Rd
+
+np.linalg.eigh (calcula ) -> devuelve los autovalores () y los autovectores (cada columna es un auto vectores)
+
+debemos entrenar PCA despues de #compute random samples. Proyectar los random samples. Recomputar las features. A partir de ahi hay que trabajar con la dimencionalidad que corresponda.
+
+3) tamaños a probar 10, 50 100. (en el codigo esta producto punto y tfidf - es la parte comentada de score)
+
+
+4)
+esta implementado: ,tfidf,
+
+kernel de interseccion
+h(x, z) = sumatoria de i=1 hsta D min(xi, zi)
+entender lista invertida y como funcionan los scores
+
+
+test_affine.py
+matcher = cv2.BFMatcher()
+matcher.knnMatch (matcher usando un esquema de vecinos mas cercano que funciona mas rapido)
