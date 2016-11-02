@@ -54,7 +54,7 @@ from scipy.spatial import distance
 import base64
 
 
-N_QUERY = 100
+N_QUERY = 50
 
 
 def read_image_list(imlist_file):
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     # BUILD VOCABULARY
     # ----------------
 
-    unsup_base_path = '/media/jrg/DATA/Datasets/UKB/ukbench/full/'
+    unsup_base_path = 'ukbench/full/'
     unsup_image_list_file = 'image_list.txt'
 
     output_path = 'cache'

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
-AAVC, FaMAF-UNC, 11-OCT-2016
+'''AAVC, FaMAF-UNC, 11-OCT-2016
 
 ==========================================
 Lab 2: Búsqueda y recuperación de imágenes
@@ -11,9 +10,26 @@ Lab 2: Búsqueda y recuperación de imágenes
 Nister, D., & Stewenius, H. (2006). Scalable recognition with a vocabulary
 tree. In: CVPR. link: http://vis.uky.edu/~stewe/ukbench/
 
-1) Implementar verificación geométrica (ver función geometric_consistency)
+1) Implementar verificación geométrica (ver función geometric_consistency). Si
+   se implementa desde cero (estimación afín + RANSAC) cuenta como punto *.
 
-2-N) TBD
+2) PCA sobre descriptores: entrenar modelo a partir del conjunto de 100K
+   descriptores random. Utilizarlo para proyectar los descriptores locales.
+   Evaluar impacto de la dimensionalidad (16, 32, 64) con y sin re-normalizar L2
+   los descriptores después de la proyección.
+
+3) Evaluar influencia del tamaño de la lista corta y las diferentes formas de
+   scoring.
+
+4*) Modificar el esquema de scoring de forma tal de rankear las imágenes usando
+   el kernel de intersección sobre los vectores BoVW equivalentes. Como se puede
+   extender a kernels aditivos?. NOTA: al emplear el kernel de intersección los
+   vectores BoVW deben estar normalizados L1.
+
+NOTA: a los fines de evaluar performance en retrieval utilizaremos como imágenes
+de query la primera imagen de los 100 primeros objetos disponibles en el
+dataset. Para hacer pruebas rápidas y debug, se puede setear N_QUERY a un valor
+mas chico.
 
 '''
 from __future__ import print_function
@@ -29,13 +45,19 @@ np.seterr(all='raise')
 
 import cv2
 
-from utils import load_data, save_data, load_index, save_index, get_random_sample, compute_features
+from utils import (load_data, save_data, load_index, save_index,
+                   get_random_sample, compute_features, arr2kp)
 
 from sklearn.cluster import KMeans
 
 from scipy.spatial import distance
 
+from homework import homemade_ransac
+
 import base64
+
+
+N_QUERY = 50
 
 
 def read_image_list(imlist_file):
@@ -46,8 +68,6 @@ def geometric_consistency(feat1, feat2):
     kp1, desc1 = feat1['kp'], feat1['desc']
     kp2, desc2 = feat2['kp'], feat2['desc']
 
-    number_of_inliers = 0
-
     '''
     1) matching de features
     2) Estimar una tranformación afín empleando RANSAC
@@ -57,8 +77,38 @@ def geometric_consistency(feat1, feat2):
        b) implementar RANSAC usando esa función como estimador base
     3) contar y retornar número de inliers
     '''
+    kp1 = arr2kp(kp1)
+    kp2 = arr2kp(kp2)
+    MATCHER = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+    matches = MATCHER.match(desc1, desc2)
+
+    dist_threshold = 64
+    good_matches = [m for m in matches if m.distance < dist_threshold]
+
+    kp1_good = np.float32([kp1[m.queryIdx].pt for m in good_matches])
+    kp2_good = np.float32([kp2[m.trainIdx].pt for m in good_matches])
+    # afftr, inliers = ransac((kp1_good, kp2_good), AffineTransform, min_samples=3, residual_threshold=3)
+    afftr, inliers = homemade_ransac((kp1_good, kp2_good), n=3, k=5, t=3, d=3)
+    number_of_inliers = len(inliers)
 
     return number_of_inliers
+
+
+def pca_fit(samples):
+    _, ndim = samples.shape
+    P = np.empty((ndim, ndim))
+    mu = np.empty(ndim)
+    '''
+    1) computar la media (mu) de las muestras de entrenamiento
+    2) computar matriz de covarianza
+    3) computar autovectores y autovalores de la matriz de covarianza
+    4) ordenar autovectores por valores decrecientes de los autovectores
+    '''
+    return P, mu
+
+
+def pca_project(x, P, mu, dim):
+    return np.dot((x - mu).reshape(1, -1), P[:, :dim]).squeeze()
 
 
 if __name__ == "__main__":
@@ -128,13 +178,11 @@ if __name__ == "__main__":
 
         for i, fname in enumerate(image_list):
             imfile = join(base_path, fname)
-            fname = fname.encode('ascii')
             imID = base64.encodestring(fname) # as int? / simlink to filepath?
             if imID in index['id2i']:
                 continue
             index['id2i'][imID] = i
 
-            fname = fname.decode('ascii')
             ffile = join(output_path, splitext(fname)[0] + '.feat')
             fdict = load_data(ffile)
             kp, desc = fdict['kp'], fdict['desc']
@@ -176,7 +224,11 @@ if __name__ == "__main__":
 
     n_short_list = 100
 
-    for n, fname in enumerate(image_list[:4]):
+    score = []
+
+    query_list = [image_list[i] for i in range(0, 4 * N_QUERY, 4)]
+
+    for fname in query_list:
         imfile = join(base_path, fname)
 
         # compute low-level features
@@ -199,9 +251,9 @@ if __name__ == "__main__":
         for i, idx_ in enumerate(idx):
             index_i = index['dbase'][idx_]
             for (id_, c) in index_i:
-                #scores[id_] += 1
+        #scores[id_] += 1
                 #scores[id_] += count[i] * c / index['norm'][id_]
-                scores[id_] += idf[i] * count[i] * c / index['norm'][id_]
+                scores[id_] += idf2[i] * count[i] * c / index['norm'][id_]
 
         # rank list
         short_list = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:n_short_list]
@@ -221,8 +273,17 @@ if __name__ == "__main__":
             idxs = np.argsort(-np.array(scores))
             short_list = [short_list[i] for i in idxs]
 
-        # print output
+        # get index from file name
+        n = int(splitext(fname)[0][-5:])
+
+        # compute score for query + print output
+        tp = 0
         print('Q: {}'.format(image_list[n]))
         for id_, s in short_list[:4]:
             i = index['id2i'][id_]
+            tp += int((i//4) == (n//4))
             print('  {:.3f} {}'.format(s/query_norm, image_list[i]))
+        print('  hits = {}'.format(tp))
+        score.append(tp)
+
+    print('retrieval score = {:.2f}'.format(np.mean(score)))
