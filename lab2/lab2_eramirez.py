@@ -52,12 +52,15 @@ from sklearn.cluster import KMeans
 
 from scipy.spatial import distance
 
+from skimage.measure import ransac
+from skimage.transform import AffineTransform
+
 from homework import homemade_ransac
 
 import base64
 
 
-N_QUERY = 50
+N_QUERY = 100
 
 
 def read_image_list(imlist_file):
@@ -82,14 +85,24 @@ def geometric_consistency(feat1, feat2):
     MATCHER = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
     matches = MATCHER.match(desc1, desc2)
 
-    dist_threshold = 64
+    dist_threshold = 0.2
     good_matches = [m for m in matches if m.distance < dist_threshold]
+    if len(good_matches) < 4:
+        number_of_inliers = 0
+    else:
+        kp1_good = np.float32([kp1[m.queryIdx].pt for m in good_matches])
+        kp2_good = np.float32([kp2[m.trainIdx].pt for m in good_matches])
 
-    kp1_good = np.float32([kp1[m.queryIdx].pt for m in good_matches])
-    kp2_good = np.float32([kp2[m.trainIdx].pt for m in good_matches])
-    # afftr, inliers = ransac((kp1_good, kp2_good), AffineTransform, min_samples=3, residual_threshold=3)
-    afftr, inliers = homemade_ransac((kp1_good, kp2_good), n=3, k=5, t=3, d=3)
-    number_of_inliers = len(inliers)
+        # Using skitimage ransac
+        try:
+            afftr, inliers = ransac((kp1_good, kp2_good), AffineTransform, min_samples=3, residual_threshold=3)
+            number_of_inliers = len([i for i in inliers if i])
+        except:
+            number_of_inliers = 0
+
+        # Homemade ransac
+        # afftr, inliers = homemade_ransac((kp1_good, kp2_good))
+        # number_of_inliers = len(inliers)
 
     return number_of_inliers
 
@@ -228,7 +241,7 @@ if __name__ == "__main__":
 
     query_list = [image_list[i] for i in range(0, 4 * N_QUERY, 4)]
 
-    for fname in query_list:
+    for i_fname, fname in enumerate(query_list):
         imfile = join(base_path, fname)
 
         # compute low-level features
@@ -278,7 +291,7 @@ if __name__ == "__main__":
 
         # compute score for query + print output
         tp = 0
-        print('Q: {}'.format(image_list[n]))
+        print('Q {}/{}: {}'.format(i_fname + 1, len(query_list), image_list[n]))
         for id_, s in short_list[:4]:
             i = index['id2i'][id_]
             tp += int((i//4) == (n//4))

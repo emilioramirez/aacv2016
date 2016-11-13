@@ -17,9 +17,12 @@ x~i = P'T(x-u) pertenece a Rd
 
 np.linalg.eigh (calcula ) -> devuelve los autovalores () y los autovectores (cada columna es un auto vectores)
 
-debemos entrenar PCA despues de #compute random samples. Proyectar los random samples. Recomputar las features. A partir de ahi hay que trabajar con la dimencionalidad que corresponda.
+debemos entrenar PCA despues de #compute random samples. Proyectar los random
+samples. Recomputar las features. A partir de ahi hay que trabajar con la
+dimencionalidad que corresponda.
 
-3) tamaños a probar 10, 50 100. (en el codigo esta producto punto y tfidf - es la parte comentada de score)
+3) tamaños a probar 10, 50 100. (en el codigo esta producto punto y tfidf - es
+la parte comentada de score)
 
 
 4)
