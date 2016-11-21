@@ -45,24 +45,18 @@ np.seterr(all='raise')
 
 import cv2
 
-from utils import (load_data, save_data, load_index, save_index,
-                   get_random_sample, compute_features, arr2kp)
+from utils import load_data, save_data, load_index, save_index, get_random_sample, compute_features, arr2kp
 
 from sklearn.cluster import KMeans
 
 from scipy.spatial import distance
 
+import base64
+
 from skimage.measure import ransac
 from skimage.transform import AffineTransform
 
-from homework import homemade_ransac
-
-import base64
-
-
 N_QUERY = 100
-DIM = 16
-PCA_PROJECT = False
 
 
 def read_image_list(imlist_file):
@@ -72,7 +66,9 @@ def read_image_list(imlist_file):
 def geometric_consistency(feat1, feat2):
     kp1, desc1 = feat1['kp'], feat1['desc']
     kp2, desc2 = feat2['kp'], feat2['desc']
+
     number_of_inliers = 0
+
     '''
     1) matching de features
     2) Estimar una tranformación afín empleando RANSAC
@@ -82,47 +78,19 @@ def geometric_consistency(feat1, feat2):
        b) implementar RANSAC usando esa función como estimador base
     3) contar y retornar número de inliers
     '''
-    kp1 = arr2kp(kp1)
-    kp2 = arr2kp(kp2)
-    MATCHER = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
-    matches = MATCHER.match(desc1, desc2)
-
-    dist_threshold = 0.2
-    good_matches = [m for m in matches if m.distance < dist_threshold]
-    if len(good_matches) < 4:
-        number_of_inliers = 0
-    else:
-        kp1_good = np.float32([kp1[m.queryIdx].pt for m in good_matches])
-        kp2_good = np.float32([kp2[m.trainIdx].pt for m in good_matches])
-
-        # Using skitimage ransac
-        try:
-            afftr, inliers = ransac((kp1_good, kp2_good), AffineTransform, min_samples=3, residual_threshold=3)
-            number_of_inliers = len([i for i in inliers if i])
-        except:
-            number_of_inliers = 0
-
-        # Homemade ransac
-        # afftr, inliers = homemade_ransac((kp1_good, kp2_good))
-        # number_of_inliers = len(inliers)
-
     return number_of_inliers
 
 
 def pca_fit(samples):
+    _, ndim = samples.shape
+    P = np.empty((ndim, ndim))
+    mu = np.empty(ndim)
     '''
     1) computar la media (mu) de las muestras de entrenamiento
     2) computar matriz de covarianza
     3) computar autovectores y autovalores de la matriz de covarianza
     4) ordenar autovectores por valores decrecientes de los autovectores
     '''
-    mu = np.mean(samples, axis=0)
-    cov_mat = (samples - mu).T.dot((samples - mu)) / (samples.shape[0] - 1)
-    eig_vals, eig_vecs = np.linalg.eig(cov_mat)
-
-    idx = eig_vals.argsort()[::-1]
-    P = eig_vecs[:,idx]
-
     return P, mu
 
 
@@ -137,7 +105,8 @@ if __name__ == "__main__":
     # BUILD VOCABULARY
     # ----------------
 
-    unsup_base_path = 'ukbench/full/'
+    #unsup_base_path = '/media/jrg/DATA/Datasets/UKB/ukbench/full/'
+    unsup_base_path = '/media/jrg/T2/Datasets/UKB/ukbench/full/'
     unsup_image_list_file = 'image_list.txt'
 
     output_path = 'cache'
@@ -152,37 +121,9 @@ if __name__ == "__main__":
         save_data(unsup_samples, unsup_samples_file)
         print('{} saved'.format(unsup_samples_file))
 
-    pca_project_file = join(output_path, 'pca_dim_{:d}_samples_{:d}.dat'.format(DIM, n_samples))
-    P_fited_sample = join(output_path, 'P_samples_{:d}.dat'.format(n_samples))
-    mu_fited_sample = join(output_path, 'mu_samples_{:d}.dat'.format(n_samples))
-    if PCA_PROJECT:
-        if not exists(pca_project_file):
-            samples = load_data(unsup_samples_file)
-
-            if not exists(P_fited_sample) or not exists(mu_fited_sample):
-                P, mu = pca_fit(samples)
-                np.save(open(P_fited_sample, "rb"), P)
-                np.save(open(mu_fited_sample, "rb"), mu)
-                print('{} and {} saved'.format(P_fited_sample, mu_fited_sample))
-            else:
-                P = np.load(P_fited_sample)
-                mu = np.load(mu_fited_sample)
-
-            new_samples = []
-            for sample in samples:
-                new_samples.append(pca_project(sample, P, mu, DIM))
-            save_data(np.array(new_samples), pca_project_file)
-            print('{} saved'.format(pca_project_file))
-
     # compute vocabulary
     n_clusters = 1000
-
-    if PCA_PROJECT:
-        vocabulary_file = join(output_path, 'pca_dim_{:d}_vocabulary_{:d}.dat'.format(DIM, n_clusters))
-        unsup_samples_file = pca_project_file
-    else:
-        vocabulary_file = join(output_path, 'vocabulary_{:d}.dat'.format(n_clusters))
-
+    vocabulary_file = join(output_path, 'vocabulary_{:d}.dat'.format(n_clusters))
     if not exists(vocabulary_file):
         samples = load_data(unsup_samples_file)
         kmeans = KMeans(n_clusters=n_clusters, verbose=1, n_jobs=-2)
@@ -208,13 +149,7 @@ if __name__ == "__main__":
         print('{}: {} features'.format(featfile, len(fdict['desc'])))
 
     # compute inverted index
-    if PCA_PROJECT:
-        index_file = join(output_path, 'pca_dim_{:d}_index_{:d}.dat'.format(DIM, n_clusters))
-        P = np.load(P_fited_sample)
-        mu = np.load(mu_fited_sample)
-    else:
-        index_file = join(output_path, 'index_{:d}.dat'.format(n_clusters))
-
+    index_file = join(output_path, 'index_{:d}.dat'.format(n_clusters))
     if not exists(index_file):
         vocabulary = load_data(vocabulary_file)
         n_clusters, n_dim = vocabulary.shape
@@ -224,14 +159,15 @@ if __name__ == "__main__":
             'df': np.zeros(n_clusters, dtype=int),                # doc. frec.
             'dbase': dict([(k, []) for k in range(n_clusters)]),  # inv. file
             'id2i': {},                                           # id->index
-            'norm': {}                                            # L2-norms
+            'norm': {},                                           # L2-norms
+            'nd': {}                                              # number of features per image
         }
 
         n_images = len(image_list)
 
         for i, fname in enumerate(image_list):
             imfile = join(base_path, fname)
-            imID = base64.encodestring(fname.encode()) # as int? / simlink to filepath?
+            imID = base64.encodestring(fname) # as int? / simlink to filepath?
             if imID in index['id2i']:
                 continue
             index['id2i'][imID] = i
@@ -239,12 +175,6 @@ if __name__ == "__main__":
             ffile = join(output_path, splitext(fname)[0] + '.feat')
             fdict = load_data(ffile)
             kp, desc = fdict['kp'], fdict['desc']
-
-            if PCA_PROJECT:
-                new_desc = []
-                for d in desc:
-                    new_desc.append(pca_project(d, P, mu, DIM))
-                desc = np.array(new_desc)
 
             nd = len(desc)
             if nd == 0:
@@ -257,8 +187,8 @@ if __name__ == "__main__":
                 index['dbase'][j].append((imID, c))
             index['n'] += 1
             index['df'][idx] += 1
-            #index['norm'][imID] = np.float32(nd)
             index['norm'][imID] = np.linalg.norm(count)
+            index['nd'][imID] = float(nd)
 
             print('\rindexing {}/{}'.format(i+1, n_images), end='')
             sys.stdout.flush()
@@ -271,16 +201,14 @@ if __name__ == "__main__":
     # RETRIEVAL
     # ---------
 
-    print('loading vocabulary ...', vocabulary_file, end=' ')
     vocabulary = load_data(vocabulary_file)
 
-    print('loading index ...', index_file, end=' ')
+    print('loading index ...', end=' ')
     sys.stdout.flush()
     index = load_index(index_file)
     print('OK')
 
     idf = np.log(index['n'] / (index['df'] + 2**-23))
-    idf2 = idf ** 2.0
 
     n_short_list = 100
 
@@ -288,7 +216,7 @@ if __name__ == "__main__":
 
     query_list = [image_list[i] for i in range(0, 4 * N_QUERY, 4)]
 
-    for i_fname, fname in enumerate(query_list):
+    for fname in query_list:
         imfile = join(base_path, fname)
 
         # compute low-level features
@@ -299,29 +227,50 @@ if __name__ == "__main__":
             fdict = compute_features(imfile)
         kp, desc = fdict['kp'], fdict['desc']
 
-        if PCA_PROJECT:
-            P = np.load(P_fited_sample)
-            mu = np.load(mu_fited_sample)
-            new_desc = []
-            for d in desc:
-                new_desc.append(pca_project(d, P, mu, DIM))
-            desc = np.array(new_desc)
-
-        # retrieve short list
+        # get visual word asssinments + counts
         dist2 = distance.cdist(desc, vocabulary, metric='sqeuclidean')
         assignments = np.argmin(dist2, axis=1)
-        idx, count = np.unique(assignments, return_counts=True)
-
-        query_norm = np.linalg.norm(count)
+        idx_qy, count_qy = np.unique(assignments, return_counts=True)
 
         # score images using the (modified) dot-product with the query
         scores = dict.fromkeys(index['id2i'], 0)
-        for i, idx_ in enumerate(idx):
-            index_i = index['dbase'][idx_]
-            for (id_, c) in index_i:
-        #scores[id_] += 1
-                #scores[id_] += count[i] * c / index['norm'][id_]
-                scores[id_] += idf2[i] * count[i] * c / index['norm'][id_]
+
+        # flat/cosine/IK similarities ------------------------------------------
+
+        query_norm = np.linalg.norm(count_qy)
+        count_qy = count_qy.astype(np.float)  # otherwise =/ raises an exception
+        count_qy /= (query_norm + 2**-23)   # comment this line for flat scoring
+
+        for i, idx_qy_i in enumerate(idx_qy):  # for each VW in the query
+            inverted_list = index['dbase'][idx_qy_i]   # retrieve inv. list
+            for (img_id, count_db_i) in inverted_list:
+                # # flat scores
+		# scores[img_id] += 1
+
+                # cosine similarity = dot-prod. between l2-normalized BoVWs
+                scores[img_id] += count_qy[i] * count_db_i / index['norm'][img_id]
+
+                # # intersection kernel
+                # scores[img_id] += ...
+
+        # tf-idf ---------------------------------------------------------------
+
+        # tf_idf_qy = idf[idx_qy] * count_qy / float(len(desc))
+        # tf_idf_qy /= (np.linalg.norm(tf_idf_qy) + 2**-23)
+
+        # tf_idf_db_norm = dict.fromkeys(index['id2i'], 0)
+
+        # for i, idx_qy_i in enumerate(idx_qy):
+        #     inverted_list = index['dbase'][idx_qy_i]
+        #     for (img_id, count_db_i) in inverted_list:
+        #         tf_idf_db_i = idf[idx_qy_i] * count_db_i / index['nd'][img_id]
+        #         tf_idf_db_norm[img_id] += tf_idf_db_i ** 2.0
+        #         scores[img_id] += tf_idf_qy[i] * tf_idf_db_i
+
+        # for img_id in scores.keys():
+        #     scores[img_id] /= np.sqrt(tf_idf_db_norm[img_id] + 2**-23)
+
+        # ----------------------------------------------------------------------
 
         # rank list
         short_list = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:n_short_list]
@@ -337,7 +286,7 @@ if __name__ == "__main__":
             scores.append(consistency_score)
 
         # re-rank short list
-        if np.sum(scores) > 0:
+        if np.sum(scores) > 0.0:
             idxs = np.argsort(-np.array(scores))
             short_list = [short_list[i] for i in idxs]
 
@@ -346,11 +295,11 @@ if __name__ == "__main__":
 
         # compute score for query + print output
         tp = 0
-        print('Q {}/{}: {}'.format(i_fname + 1, len(query_list), image_list[n]))
+        print('Q: {}'.format(image_list[n]))
         for id_, s in short_list[:4]:
             i = index['id2i'][id_]
             tp += int((i//4) == (n//4))
-            print('  {:.3f} {}'.format(s/query_norm, image_list[i]))
+            print('  {:.3f} {}'.format(s, image_list[i]))
         print('  hits = {}'.format(tp))
         score.append(tp)
 
