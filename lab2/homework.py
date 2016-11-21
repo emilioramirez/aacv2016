@@ -31,16 +31,16 @@ def calculate_affine_transformation(src, dst, idxs):
 
 
 def calculate_distance(src, dst, model):
-    # H = model[:4].reshape(2, -1)
-    # t = model[-2:]
-    # d1 = np.linalg.norm((np.dot(H, src) + t) - dst)
-    m1, m2, m3, m4 = model[:4]
-    t1, t2 = model[-2:]
-    x1, x2 = src
-    x = m1 * x1 + t1
-    y = m2 * x2 + t2
-    x1_, x2_ = dst
-    d1 = np.sqrt((x - x1_)**2 + (y - x2_)**2)
+    H = model[:4].reshape(2, -1)
+    t = model[-2:]
+    d1 = np.linalg.norm((np.dot(H, src) + t) - dst)
+    # m1, m2, m3, m4 = model[:4]
+    # t1, t2 = model[-2:]
+    # x1, x2 = src
+    # x = m1 * x1 + t1
+    # y = m2 * x2 + t2
+    # x1_, x2_ = dst
+    # d1 = np.sqrt((x - x1_)**2 + (y - x2_)**2)
     return d1
 
 

@@ -61,8 +61,8 @@ import base64
 
 
 N_QUERY = 100
-DIM = 16
-PCA_PROJECT = False
+DIM = 32
+PCA_PROJECT = True
 
 
 def read_image_list(imlist_file):
